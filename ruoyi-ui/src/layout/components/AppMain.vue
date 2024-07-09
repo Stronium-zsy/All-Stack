@@ -65,7 +65,6 @@ export default {
 }
 
 ::-webkit-scrollbar-track {
-  background-color: #f1f1f1;
 }
 
 ::-webkit-scrollbar-thumb {

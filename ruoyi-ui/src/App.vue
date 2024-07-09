@@ -1,6 +1,8 @@
 <template>
   <div id="app">
+    <keep-alive>
     <router-view />
+    </keep-alive>
     <theme-picker />
   </div>
 </template>
@@ -24,5 +26,6 @@ export default {
 <style scoped>
 #app .theme-picker {
   display: none;
+
 }
 </style>

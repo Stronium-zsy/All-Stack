@@ -1,4 +1,5 @@
 <template>
+
   <div :class="classObj" class="app-wrapper" :style="{'--current-color': theme}">
     <div v-if="device==='mobile'&&sidebar.opened" class="drawer-bg" @click="handleClickOutside"/>
     <sidebar v-if="!sidebar.hide" class="sidebar-container"/>
@@ -21,10 +22,12 @@ import { AppMain, Navbar, Settings, Sidebar, TagsView } from './components'
 import ResizeMixin from './mixin/ResizeHandler'
 import { mapState } from 'vuex'
 import variables from '@/assets/styles/variables.scss'
+import Welcomepage from "../views/welcomepage.vue";
 
 export default {
   name: 'Layout',
   components: {
+    Welcomepage,
     AppMain,
     Navbar,
     RightPanel,

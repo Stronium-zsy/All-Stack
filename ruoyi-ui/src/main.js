@@ -19,6 +19,12 @@ import './permission' // permission control
 import { getDicts } from "@/api/system/dict/data";
 import { getConfigKey } from "@/api/system/config";
 import { parseTime, resetForm, addDateRange, selectDictLabel, selectDictLabels, handleTree } from "@/utils/ruoyi";
+// src/main.js 或 src/main.ts
+import 'bootstrap/dist/css/bootstrap.min.css';
+import 'bootstrap/dist/js/bootstrap.bundle.min.js'; // 可选，根据需要导入 Bootstrap 的 JS
+// src/main.js 或 src/main.ts
+import 'font-awesome/css/font-awesome.min.css';
+
 // 分页组件
 import Pagination from "@/components/Pagination";
 // 自定义表格工具组件
@@ -38,6 +44,13 @@ import VueMeta from 'vue-meta'
 // 字典数据组件
 import DictData from '@/components/DictData'
 
+import { library } from '@fortawesome/fontawesome-svg-core'
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
+import { fas } from '@fortawesome/free-solid-svg-icons'
+
+library.add(fas)
+
+
 // 全局方法挂载
 Vue.prototype.getDicts = getDicts
 Vue.prototype.getConfigKey = getConfigKey
@@ -51,6 +64,7 @@ Vue.prototype.handleTree = handleTree
 
 // 全局组件挂载
 Vue.component('DictTag', DictTag)
+Vue.component('font-awesome-icon', FontAwesomeIcon)
 Vue.component('Pagination', Pagination)
 Vue.component('RightToolbar', RightToolbar)
 Vue.component('Editor', Editor)

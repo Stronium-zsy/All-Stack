@@ -1,5 +1,6 @@
 <template>
   <div style="width:1800px;height:1000px;">
+
     <div id="map_cc7d1b7fb1ad09e0732bbbd940dd9c71"></div>
     <div id="timestamp_box" class="timestamp-box">
       <p>当前时间: {{ latestTimestamp }}</p>
@@ -11,14 +12,15 @@
         <li v-for="rank in topSpeedRanks" :key="rank.sensor_id">{{ rank.sensor_id }}: {{ rank.speed.toFixed(2) }} 英里/时</li>
       </ul>
     </div>
-    <div id="chart" class="timestamp-box">
-      <canvas id="averageSpeedChart" width="750" height="280"></canvas>
-    </div>
+
     <div id="street_speed_rank" class="timestamp-box">
       <p>街道平均速度:</p>
       <ul>
         <li v-for="(avgSpeed, street) in streetAverages" :key="street">{{ street }}: {{ avgSpeed !== null ? avgSpeed.toFixed(2) : 'No data' }} 英里/时</li>
       </ul>
+    </div>
+    <div id="chart" class="timestamp-box">
+      <canvas id="averageSpeedChart" width="750" height="280"></canvas>
     </div>
     <div id="search_bar" class="timestamp-box">
       <input type="text" v-model="searchQuery" placeholder="输入传感器ID火车街道名称">
@@ -29,6 +31,7 @@
         <button id="search_button" @click="searchRoute">搜索</button>
       </div>
     </div>
+
   </div>
 </template>
 
@@ -338,6 +341,7 @@ export default {
   text-align: center;
   border: 1px solid rgba(255, 255, 255, 0.2);
   animation: pulse 2s infinite;
+  transform:translate(1055px,0);
 }
 .map-marker {
   position: relative;
@@ -369,7 +373,7 @@ export default {
 #chart {
   width: 750px;
   height: 280px;
-  transform: translate(0px, 410px);
+  transform: translate(700px, 410px);
 }
 #street_speed_rank {
   width: 310px;
@@ -379,7 +383,7 @@ export default {
 #search_bar {
   width: 705px;
   height: 280px;
-  transform: translate(755px, 410px);
+  transform: translate(0px, 410px);
 }
 #search_bar input {
   width: 500px;
@@ -424,6 +428,9 @@ export default {
   height: 45px;
   width:100px;
   margin-left: 10px;
+}
+#averageSpeedChart{
+  transform:translate(700px,0px);
 }
 #search_teach{
   width: 91%;

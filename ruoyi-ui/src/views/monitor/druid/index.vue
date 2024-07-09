@@ -1,44 +1,46 @@
 <template>
   <div class="container">
-    <h1 class="text-center">数据统计面板</h1>
-    <div class="card">
-      <form @submit.prevent="fetchData">
-        <div class="form-group">
-          <label>数据统计开始日期:</label>
-          <input type="datetime-local" v-model="startTime" required>
-        </div>
-        <div class="form-group">
-          <label>数据统计结束日期:</label>
-          <input type="datetime-local" v-model="endTime" required>
-        </div>
-        <div class="form-group">
-          <label>平均速度前N的传感器ID:</label>
-          <input type="number" v-model.number="topNSensors">
-        </div>
-        <div class="form-group">
-          <label>平均速度后N的传感器ID:</label>
-          <input type="number" v-model.number="bottomNSensors">
-        </div>
-        <div class="form-group">
-          <label>平均速度前N的街道名称:</label>
-          <input type="number" v-model.number="topNStreets">
-        </div>
-        <div class="form-group">
-          <label>平均速度后N的街道名称:</label>
-          <input type="number" v-model.number="bottomNStreets">
-        </div>
-        <div class="form-group">
-          <label>传感器ID:</label>
-          <input type="text" v-model="sensorid" placeholder="Sensor ID">
-        </div>
-        <div class="form-group">
-          <label>街道名称:</label>
-          <input type="text" v-model="street" placeholder="Street">
-        </div>
-        <button type="submit">统计数据</button>
-      </form>
+    <div id="container">
+      <div id="searchcard">
+        <div id="title">数据统计面板</div>
+        <form @submit.prevent="fetchData" id="search-form">
+          <div class="form-group">
+            <label>数据统计开始日期:</label>
+            <input type="datetime-local" v-model="startTime" class="datetime-local" required>
+          </div>
+          <div class="form-group">
+            <label>数据统计结束日期:</label>
+            <input type="datetime-local" v-model="endTime" class="datetime-local" required>
+          </div>
+          <div class="form-group">
+            <label>平均速度前N的传感器ID:</label>
+            <input type="number" v-model.number="topNSensors">
+          </div>
+          <div class="form-group">
+            <label>平均速度后N的传感器ID:</label>
+            <input type="number" v-model.number="bottomNSensors">
+          </div>
+          <div class="form-group">
+            <label>平均速度前N的街道名称:</label>
+            <input type="number" v-model.number="topNStreets">
+          </div>
+          <div class="form-group">
+            <label>平均速度后N的街道名称:</label>
+            <input type="number" v-model.number="bottomNStreets">
+          </div>
+          <div class="form-group">
+            <label>传感器ID:</label>
+            <input type="text" v-model="sensorid" placeholder="Sensor ID">
+          </div>
+          <div class="form-group">
+            <label>街道名称:</label>
+            <input type="text" v-model="street" placeholder="Street">
+          </div>
+          <button type="submit" id="submit-button">统计数据</button>
+        </form>
+      </div>
 
-      <div v-if="images.length">
+      <div class="images-card" v-if="images.length">
         <div v-for="(image, index) in images" :key="index" class="result-image-container">
           <img :src="image.src" :alt="image.alt" class="result-image">
           <p>{{ image.title }}</p>
@@ -54,8 +56,8 @@ import axios from 'axios';
 export default {
   data() {
     return {
-      startTime: '2024-01-01 00:00:00',
-      endTime: '2024-01-01 00:00:00',
+      startTime: '2024-01-01T00:00',
+      endTime: '2024-01-01T00:00',
       topNSensors: null,
       bottomNSensors: null,
       topNStreets: null,
@@ -67,25 +69,19 @@ export default {
   },
   methods: {
     roundMinutesToNearest5(datetime) {
-      // 去掉时间字符串中的T
       let dateStr = datetime.replace('T', ' ');
 
-      // 将日期和时间部分分开
       let [datePart, timePart] = dateStr.split(' ');
 
-      // 将时间部分分成小时和分钟
       let [hours, minutes] = timePart.split(':').map(Number);
 
-      // 四舍五入到最近的5分钟
       let roundedMinutes = Math.round(minutes / 5) * 5;
 
-      // 如果四舍五入后的分钟数超过了59，需要处理小时和天数
       if (roundedMinutes === 60) {
         roundedMinutes = 0;
         hours += 1;
         if (hours === 24) {
           hours = 0;
-          // 简单处理日期部分，假设每月有30天
           let [year, month, day] = datePart.split('-').map(Number);
           day += 1;
           if (day > 30) {
@@ -100,10 +96,8 @@ export default {
         }
       }
 
-      // 构造新的时间部分字符串
       let newTimePart = `${hours.toString().padStart(2, '0')}:${roundedMinutes.toString().padStart(2, '0')}`;
 
-      // 返回新的日期时间字符串
       return `${datePart} ${newTimePart}`;
     },
     async fetchData() {
@@ -160,7 +154,6 @@ export default {
     async fetchTopStreets() {
       try {
         const response = await axios.get('http://127.0.0.1:5000/max_top_street', {
-
           params: {
             timestep: this.roundMinutesToNearest5(this.startTime),
             n: this.topNStreets
@@ -220,50 +213,48 @@ export default {
 };
 </script>
 
-<style>
+<style scoped>
 .container {
-  max-width: 1500px;
+  max-width: 100%;
   margin: 0 auto;
-  padding: 20px;
   font-family: Arial, sans-serif;
-  background-color: #1c1e24;
+  background-color: #242424;
   color: #ffffff;
   border-radius: 8px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-}
+  padding: 0;
 
-.text-center {
-  text-align: center;
-  margin-bottom: 20px;
-  color: #ffffff;
 }
-
-.card {
-  background-color: #282c34;
+.form-group {
+  margin-top: 30px;
+}
+.images-card {
+  flex: 2;
+  background-color: #242424;
   padding: 20px;
-  margin: 20px 0;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  overflow-y: auto;
+  max-height: 1000px;
 }
 
-.card form {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
+.form-card form {
+  display: flex;
+  flex-direction: column;
+  width: 400px;
 }
 
-.card .form-group {
+.form-card .form-group {
   display: flex;
   flex-direction: column;
 }
 
-.card label {
+.form-card label {
   margin-bottom: 5px;
   color: #bbb;
 }
 
-.card input {
-  padding: 10px;
+.form-card input {
   border: none;
   border-radius: 4px;
   background-color: #3a3f47;
@@ -271,17 +262,33 @@ export default {
   margin-bottom: 20px;
 }
 
-.card button {
+.datetime-local {
+  padding: 6px;
+  font-size: 14px;
+  border: 1px solid white;
+  border-radius: 4px;
+  background-color: transparent;
+  color: white;
+  margin-bottom: 20px;
+  -webkit-appearance: none; /* 移除浏览器默认样式 (Webkit) */
+  -moz-appearance: none; /* 移除浏览器默认样式 (Mozilla) */
+  appearance: none; /* 移除浏览器默认样式 */
+}
+
+.datetime-local::-webkit-calendar-picker-indicator {
+  filter: invert(1); /* 反转颜色，使图标与背景对比更明显 */
+}
+
+.form-card button {
   padding: 10px;
   background-color: #007bff;
   color: white;
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  grid-column: span 2;
 }
 
-.card button:hover {
+.form-card button:hover {
   background-color: #0056b3;
 }
 
@@ -297,5 +304,81 @@ export default {
   margin-top: 10px;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+#container {
+  width: 1500px;
+  height: 100%;
+  background-color: transparent;
+  padding: 0;
+  display: flex;
+  flex-direction: row;
+}
+
+#searchcard {
+  width: 400px;
+  border: 2px white groove;
+  display: flex;
+  flex-direction: column;
+  border-radius: 5px;
+  overflow: scroll;
+  height: 900px;
+  max-height: 100%;
+  border-right: 1px #ccc dashed;
+}
+.form-group {
+  transform: translateX(20px);
+  width: 350px;
+}
+#title {
+  color: white;
+  font-size: 20px;
+  font-weight: 600;
+  margin-top: 30px;
+  margin-left: 20px;
+}
+input {
+  width: 335px;
+  height: 30px;
+  background-color: transparent;
+  border: 0 solid transparent;
+  border-bottom: 2px solid white;
+  color: white;
+  font-size: 15px;
+}
+.departureResults > li,
+.destinationResults > li {
+  height: 50px;
+  transition: border-color 0.3s ease;
+  border-radius: 3px;
+  line-height: 50px;
+  color: #ccc;
+  width: 340px;
+  background-color: transparent;
+  border: none;
+  list-style-type: none;
+}
+
+.departureResults > li:hover,
+.destinationResults > li:hover {
+  background-color: #383838;
+  color: white;
+  border-radius: 0;
+}
+
+#submit-button:hover {
+  background-color: #CCCCCC;
+  color: black;
+}
+#submit-button {
+  width: 250px;
+  height: 40px;
+  background-color: transparent;
+  border: 1px solid #CCCCCC;
+  color: gray;
+  margin-right: 20px;
+  margin-top: 30px;
+  border-radius: 0 5px 0 5px;
+  margin-left: 20px;
 }
 </style>

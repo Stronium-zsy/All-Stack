@@ -14,7 +14,7 @@
 </template>
 
 <script>
-import logoImg from '@/assets/logo/logo.png'
+import logoImg from '@/assets/logo/Firefly 羽胜队队徽 15775.jpg'
 import variables from '@/assets/styles/variables.scss'
 
 export default {

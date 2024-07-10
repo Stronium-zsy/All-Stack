@@ -1,5 +1,9 @@
 import Vue from 'vue'
 import Router from 'vue-router'
+import index from '@/views/index.vue'
+
+// 引入welcomepage组件
+import WelcomePage from '@/views/welcomepage'
 
 Vue.use(Router)
 
@@ -13,7 +17,7 @@ import Layout from '@/layout'
  * alwaysShow: true                 // 当你一个路由下面的 children 声明的路由大于1个时，自动会变成嵌套的模式--如组件页面
  *                                  // 只有一个时，会将那个子路由当做根路由显示在侧边栏--如引导页面
  *                                  // 若你想不管路由下面的 children 声明的个数都显示你的根路由
- *                                  // 你可以设置 alwaysShow: true，这样它就会忽略之前定义的规则，一直显示根路由
+ *                                  // 你可以设置 alwaysShow: true，这样它就会忽略之前定义的规则，一��显示根路由
  * redirect: noRedirect             // 当设置 noRedirect 的时候该路由在面包屑导航中不可被点击
  * name:'router-name'               // 设定路由的名字，一定要填写不然使用<keep-alive>时会出现各种问题
  * query: '{"id": 1, "name": "ry"}' // 访问路由的默认传递参数
@@ -62,18 +66,27 @@ export const constantRoutes = [
     hidden: true
   },
   {
-    path: '',
+    path: '/index',
     component: Layout,
-    redirect: 'index',
+    redirect: '/index',
     children: [
       {
-        path: 'index',
+        path: '/index',
         component: () => import('@/views/index'),
         name: 'Index',
         meta: { title: '首页', icon: 'dashboard', affix: true ,keepAlive:true}
       }
     ]
   },
+  {
+    path: '',
+    component: Layout,
+    redirect: '/welcome', // 修改这里
+    children: [
+      // 如果不再需要默认指向index.vue，这里的children可以移除或修改
+    ]
+  },
+
   {
     path: '/user',
     component: Layout,
@@ -87,7 +100,13 @@ export const constantRoutes = [
         meta: { title: '个人中心', icon: 'user' }
       }
     ]
-  }
+  },
+
+  {
+    path: '/welcome',
+    component: ()=>import('@/views/welcomepage'),
+    hidden: true // 不在侧边栏显示
+  },
 ]
 
 // 动态路由，基于用户权限动态去加载
@@ -179,5 +198,7 @@ Router.prototype.replace = function push(location) {
 export default new Router({
   mode: 'history', // 去掉url中的#
   scrollBehavior: () => ({ y: 0 }),
-  routes: constantRoutes
-})
+  routes: constantRoutes.concat(dynamicRoutes) // 合并常规路由和基于权限的动态路由
+}
+
+)

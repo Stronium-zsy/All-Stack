@@ -1,6 +1,5 @@
 <template>
   <div style="width:1800px;height:1000px;">
-
     <div id="map_cc7d1b7fb1ad09e0732bbbd940dd9c71"></div>
     <div id="timestamp_box" class="timestamp-box">
       <p>当前时间: {{ latestTimestamp }}</p>
@@ -12,15 +11,14 @@
         <li v-for="rank in topSpeedRanks" :key="rank.sensor_id">{{ rank.sensor_id }}: {{ rank.speed.toFixed(2) }} 英里/时</li>
       </ul>
     </div>
-
+    <div id="chart" class="timestamp-box">
+      <canvas id="averageSpeedChart" width="750" height="280"></canvas>
+    </div>
     <div id="street_speed_rank" class="timestamp-box">
       <p>街道平均速度:</p>
       <ul>
         <li v-for="(avgSpeed, street) in streetAverages" :key="street">{{ street }}: {{ avgSpeed !== null ? avgSpeed.toFixed(2) : 'No data' }} 英里/时</li>
       </ul>
-    </div>
-    <div id="chart" class="timestamp-box">
-      <canvas id="averageSpeedChart" width="750" height="280"></canvas>
     </div>
     <div id="search_bar" class="timestamp-box">
       <input type="text" v-model="searchQuery" placeholder="输入传感器ID火车街道名称">
@@ -31,7 +29,6 @@
         <button id="search_button" @click="searchRoute">搜索</button>
       </div>
     </div>
-
   </div>
 </template>
 
@@ -54,7 +51,11 @@ export default {
       markers: [], // 保存标记和位置
       searchQuery: '', // 搜索查询
       chart: null,
-      polyline: null
+      polyline: null,
+      movingMarker: null,
+      currentLatLngIndex: 0,
+      moveInterval: null,
+      refreshInterval: null
     };
   },
   computed: {
@@ -263,39 +264,86 @@ export default {
         return;
       }
 
+      clearInterval(this.refreshInterval); // 停止之前的刷新间隔
+      clearInterval(this.moveInterval); // 停止之前的移动间隔
+
+      try {
+        const startCoordinates = this.getCoordinatesFromSensorId(startPoint);
+        const endCoordinates = this.getCoordinatesFromSensorId(endPoint);
+
+        const response = await fetch('http://localhost:4999/search_route', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ startPoint: startCoordinates, endPoint: endCoordinates })
+        });
+
+        const result = await response.json();
+
+        if (result.path) {
+          this.plotRoute(result.path);
+          this.startMovingMarker(result.path); // 开始移动圆圈
+          this.refreshInterval = setInterval(() => this.refreshRoute(), 1000); // 每2秒刷新路径
+        }
+      } catch (error) {
+        console.error('Error:', error);
+      }
+    },
+    async refreshRoute() {
+      const currentLatLng = this.movingMarker.getLatLng();
+      const currentPosition = [currentLatLng.lat, currentLatLng.lng];
+
       try {
         const response = await fetch('http://localhost:4999/search_route', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ startPoint, endPoint })
+          body: JSON.stringify({ startPoint: currentPosition, endPoint: this.getCoordinatesFromSensorId(this.endPoint) })
         });
 
         const result = await response.json();
 
-        if (result.route) {
-          this.plotRoute(result.route);
+        if (result.path) {
+          this.plotRoute(result.path, false); // 不重置移动圆圈，保持其位置
         }
       } catch (error) {
         console.error('Error:', error);
       }
     },
-    plotRoute(route) {
+    plotRoute(path, resetMarker = true) {
       if (this.polyline) {
         this.map.removeLayer(this.polyline);
       }
 
-      const latlngs = route.map(sensor_id => {
-        const marker = this.markers.find(m => m.sensor_id === sensor_id);
-        return marker ? marker.position : null;
-      }).filter(position => position !== null);
+      const latlngs = path.map(coord => [coord[1], coord[0]]); // 翻转经纬度顺序以符合 Leaflet 的格式
 
       this.polyline = L.polyline(latlngs, { color: 'blue' }).addTo(this.map);
 
-      this.map.fitBounds(this.polyline.getBounds());
+      if (resetMarker) {
+        if (this.movingMarker) {
+          this.map.removeLayer(this.movingMarker);
+        }
+        this.movingMarker = L.circleMarker(latlngs[0], {
+          radius: 8,
+          color: 'red'
+        }).addTo(this.map);
+        this.currentLatLngIndex = 0;
+      }
 
-      this.plotSpeedChart(route);
+      this.plotSpeedChart(latlngs);
+    },
+    startMovingMarker(path) {
+      this.moveInterval = setInterval(() => {
+        if (this.currentLatLngIndex < path.length - 1) {
+          this.currentLatLngIndex++;
+          const latlng = [path[this.currentLatLngIndex][1], path[this.currentLatLngIndex][0]];
+          this.movingMarker.setLatLng(latlng);
+        } else {
+          clearInterval(this.moveInterval);
+        }
+      }, 5000); // 每秒移动一次
     },
     plotSpeedChart(route) {
       const speeds = route.map(sensor_id => {
@@ -309,6 +357,10 @@ export default {
       this.chart.data.datasets[0].data = speeds;
 
       this.chart.update();
+    },
+    getCoordinatesFromSensorId(sensor_id) {
+      const marker = this.markers.find(marker => marker.sensor_id === sensor_id);
+      return marker ? marker.position : null;
     }
   },
   watch: {
@@ -341,7 +393,6 @@ export default {
   text-align: center;
   border: 1px solid rgba(255, 255, 255, 0.2);
   animation: pulse 2s infinite;
-  transform:translate(1055px,0);
 }
 .map-marker {
   position: relative;
@@ -373,7 +424,7 @@ export default {
 #chart {
   width: 750px;
   height: 280px;
-  transform: translate(700px, 410px);
+  transform: translate(0px, 410px);
 }
 #street_speed_rank {
   width: 310px;
@@ -383,7 +434,7 @@ export default {
 #search_bar {
   width: 705px;
   height: 280px;
-  transform: translate(0px, 410px);
+  transform: translate(755px, 410px);
 }
 #search_bar input {
   width: 500px;
@@ -428,9 +479,6 @@ export default {
   height: 45px;
   width:100px;
   margin-left: 10px;
-}
-#averageSpeedChart{
-  transform:translate(700px,0px);
 }
 #search_teach{
   width: 91%;

@@ -17,6 +17,14 @@ const getters = {
   predictStreetAverages: state => state.predictMapData.predictStreetAverages,
   predictOverallAverageSpeed: state => state.predictMapData.predictOverallAverageSpeed,
   predictInitialMarkers: state => state.predictMapData.predictInitialMarkers,
+
+  getCurrentSpeeds: state => state.map.currentSpeeds,
+  getRoutePath: state => state.map.routePath,
+  getChart: state => state.map.chart,
+  getPolyline: state => state.map.polyline,
+  getMovingMarker: state => state.map.movingMarker,
+  getCurrentLatLngIndex: state => state.map.currentLatLngIndex,
+
   dict: state => state.dict.dict,
   visitedViews: state => state.tagsView.visitedViews,
   cachedViews: state => state.tagsView.cachedViews,

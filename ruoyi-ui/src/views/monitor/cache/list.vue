@@ -109,53 +109,18 @@
         </el-card>
       </el-col>
 
-      <el-col :span="8">
-        <el-card :bordered="false" style="height: calc(100vh - 125px)">
-          <div slot="header">
-            <span><i class="el-icon-document"></i> 缓存内容</span>
-            <el-button
-              style="float: right; padding: 3px 0"
-              type="text"
-              icon="el-icon-refresh-right"
-              @click="handleClearCacheAll()"
-              >清理全部</el-button
-            >
-          </div>
-          <el-form :model="cacheForm">
-            <el-row :gutter="32">
-              <el-col :offset="1" :span="22">
-                <el-form-item label="缓存名称:" prop="cacheName">
-                  <el-input v-model="cacheForm.cacheName" :readOnly="true" />
-                </el-form-item>
-              </el-col>
-              <el-col :offset="1" :span="22">
-                <el-form-item label="缓存键名:" prop="cacheKey">
-                  <el-input v-model="cacheForm.cacheKey" :readOnly="true" />
-                </el-form-item>
-              </el-col>
-              <el-col :offset="1" :span="22">
-                <el-form-item label="缓存内容:" prop="cacheValue">
-                  <el-input
-                    v-model="cacheForm.cacheValue"
-                    type="textarea"
-                    :rows="8"
-                    :readOnly="true"
-                  />
-                </el-form-item>
-              </el-col>
-            </el-row>
-          </el-form>
-        </el-card>
-      </el-col>
+      <SqlHistory/>
     </el-row>
   </div>
 </template>
 
 <script>
 import { listCacheName, listCacheKey, getCacheValue, clearCacheName, clearCacheKey, clearCacheAll } from "@/api/monitor/cache";
+import SqlHistory from "@/views/monitor/server/Ai.vue";
 
 export default {
   name: "CacheList",
+  components: {SqlHistory},
   data() {
     return {
       cacheNames: [],

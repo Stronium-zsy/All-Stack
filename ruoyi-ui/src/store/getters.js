@@ -3,7 +3,7 @@ const getters = {
   size: state => state.app.size,
   device: state => state.app.device,
 
-  latestTimestamp: state => state.map_data.latestTimestamp,
+  latestTimestamp: state => state.websocket.latestTimestamp,
   sensorData: state => state.map_data.sensorData,
   topSpeedRanks: state => state.map_data.topSpeedRanks,
   streetAverages: state => state.map_data.streetAverages,

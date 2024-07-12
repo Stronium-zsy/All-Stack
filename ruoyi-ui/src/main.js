@@ -16,6 +16,7 @@ import { download } from '@/utils/request'
 
 import './assets/icons' // icon
 import './permission' // permission control
+import 'leaflet-ant-path'
 import { getDicts } from "@/api/system/dict/data";
 import { getConfigKey } from "@/api/system/config";
 import { parseTime, resetForm, addDateRange, selectDictLabel, selectDictLabels, handleTree } from "@/utils/ruoyi";

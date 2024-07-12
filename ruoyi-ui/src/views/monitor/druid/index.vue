@@ -13,6 +13,10 @@
             <input type="datetime-local" v-model="endTime" class="datetime-local" required>
           </div>
           <div class="form-group">
+            <label>时间步长:</label>
+            <input type="datetime-local" v-model="timestep" class="datetime-local" required>
+          </div>
+          <div class="form-group">
             <label>平均速度前N的传感器ID:</label>
             <input type="number" v-model.number="topNSensors">
           </div>
@@ -21,12 +25,28 @@
             <input type="number" v-model.number="bottomNSensors">
           </div>
           <div class="form-group">
+            <label>平均流量前N的传感器ID:</label>
+            <input type="number" v-model.number="topNFlowSensors">
+          </div>
+          <div class="form-group">
+            <label>平均流量后N的传感器ID:</label>
+            <input type="number" v-model.number="bottomNFlowSensors">
+          </div>
+          <div class="form-group">
             <label>平均速度前N的街道名称:</label>
             <input type="number" v-model.number="topNStreets">
           </div>
           <div class="form-group">
             <label>平均速度后N的街道名称:</label>
             <input type="number" v-model.number="bottomNStreets">
+          </div>
+          <div class="form-group">
+            <label>平均流量前N的街道名称:</label>
+            <input type="number" v-model.number="topNFlowStreets">
+          </div>
+          <div class="form-group">
+            <label>平均流量后N的街道名称:</label>
+            <input type="number" v-model.number="bottomNFlowStreets">
           </div>
           <div class="form-group">
             <label>传感器ID:</label>
@@ -58,10 +78,15 @@ export default {
     return {
       startTime: '2024-01-01T00:00',
       endTime: '2024-01-01T00:00',
+      timestep: '2024-01-01T00:00:00',
       topNSensors: null,
       bottomNSensors: null,
+      topNFlowSensors: null,
+      bottomNFlowSensors: null,
       topNStreets: null,
       bottomNStreets: null,
+      topNFlowStreets: null,
+      bottomNFlowStreets: null,
       sensorid: '',
       street: '',
       images: [],
@@ -108,11 +133,23 @@ export default {
       if (this.bottomNSensors) {
         await this.fetchBottomSensors();
       }
+      if (this.topNFlowSensors) {
+        await this.fetchTopFlowSensors();
+      }
+      if (this.bottomNFlowSensors) {
+        await this.fetchBottomFlowSensors();
+      }
       if (this.topNStreets) {
         await this.fetchTopStreets();
       }
       if (this.bottomNStreets) {
         await this.fetchBottomStreets();
+      }
+      if (this.topNFlowStreets) {
+        await this.fetchTopFlowStreets();
+      }
+      if (this.bottomNFlowStreets) {
+        await this.fetchBottomFlowStreets();
       }
       if (this.sensorid) {
         await this.fetchSensorSpeed();
@@ -123,7 +160,7 @@ export default {
     },
     async fetchTopSensors() {
       try {
-        const response = await axios.get('http://127.0.0.1:5000/avg_top_sensors', {
+        const response = await axios.get('http://127.0.0.1:5000/avg_top_speed_sensors', {
           params: {
             start_time: this.roundMinutesToNearest5(this.startTime),
             end_time: this.roundMinutesToNearest5(this.endTime),
@@ -138,7 +175,7 @@ export default {
     },
     async fetchBottomSensors() {
       try {
-        const response = await axios.get('http://127.0.0.1:5000/avg_bottom_sensors', {
+        const response = await axios.get('http://127.0.0.1:5000/avg_bottom_speed_sensors', {
           params: {
             start_time: this.roundMinutesToNearest5(this.startTime),
             end_time: this.roundMinutesToNearest5(this.endTime),
@@ -151,11 +188,42 @@ export default {
         console.error('Error fetching bottom sensors:', error);
       }
     },
+    async fetchTopFlowSensors() {
+      try {
+        const response = await axios.get('http://127.0.0.1:5000/avg_top_flow_sensors', {
+          params: {
+            start_time: this.roundMinutesToNearest5(this.startTime),
+            end_time: this.roundMinutesToNearest5(this.endTime),
+            n: this.topNFlowSensors
+          },
+          responseType: 'blob'
+        });
+        this.images.push({ src: URL.createObjectURL(response.data), alt: 'Top Flow Sensors', title: 'Top Flow Sensors' });
+      } catch (error) {
+        console.error('Error fetching top flow sensors:', error);
+      }
+    },
+    async fetchBottomFlowSensors() {
+      try {
+        const response = await axios.get('http://127.0.0.1:5000/avg_bottom_flow_sensors', {
+          params: {
+            start_time: this.roundMinutesToNearest5(this.startTime),
+            end_time: this.roundMinutesToNearest5(this.endTime),
+            n: this.bottomNFlowSensors
+          },
+          responseType: 'blob'
+        });
+        this.images.push({ src: URL.createObjectURL(response.data), alt: 'Bottom Flow Sensors', title: 'Bottom Flow Sensors' });
+      } catch (error) {
+        console.error('Error fetching bottom flow sensors:', error);
+      }
+    },
     async fetchTopStreets() {
       try {
-        const response = await axios.get('http://127.0.0.1:5000/max_top_street', {
+        const response = await axios.get('http://127.0.0.1:5000/avg_top_speed_street', {
           params: {
-            timestep: this.roundMinutesToNearest5(this.startTime),
+            start_time: this.roundMinutesToNearest5(this.startTime),
+            end_time: this.roundMinutesToNearest5(this.endTime),
             n: this.topNStreets
           },
           responseType: 'blob'
@@ -167,9 +235,10 @@ export default {
     },
     async fetchBottomStreets() {
       try {
-        const response = await axios.get('http://127.0.0.1:5000/min_bottom_street', {
+        const response = await axios.get('http://127.0.0.1:5000/avg_bottom_speed_street', {
           params: {
-            timestep: this.roundMinutesToNearest5(this.startTime),
+            start_time: this.roundMinutesToNearest5(this.startTime),
+            end_time: this.roundMinutesToNearest5(this.endTime),
             n: this.bottomNStreets
           },
           responseType: 'blob'
@@ -177,6 +246,36 @@ export default {
         this.images.push({ src: URL.createObjectURL(response.data), alt: 'Bottom Streets', title: 'Bottom Streets' });
       } catch (error) {
         console.error('Error fetching bottom streets:', error);
+      }
+    },
+    async fetchTopFlowStreets() {
+      try {
+        const response = await axios.get('http://127.0.0.1:5000/avg_top_flow_street', {
+          params: {
+            start_time: this.roundMinutesToNearest5(this.startTime),
+            end_time: this.roundMinutesToNearest5(this.endTime),
+            n: this.topNFlowStreets
+          },
+          responseType: 'blob'
+        });
+        this.images.push({ src: URL.createObjectURL(response.data), alt: 'Top Flow Streets', title: 'Top Flow Streets' });
+      } catch (error) {
+        console.error('Error fetching top flow streets:', error);
+      }
+    },
+    async fetchBottomFlowStreets() {
+      try {
+        const response = await axios.get('http://127.0.0.1:5000/avg_bottom_flow_street', {
+          params: {
+            start_time: this.roundMinutesToNearest5(this.startTime),
+            end_time: this.roundMinutesToNearest5(this.endTime),
+            n: this.bottomNFlowStreets
+          },
+          responseType: 'blob'
+        });
+        this.images.push({ src: URL.createObjectURL(response.data), alt: 'Bottom Flow Streets', title: 'Bottom Flow Streets' });
+      } catch (error) {
+        console.error('Error fetching bottom flow streets:', error);
       }
     },
     async fetchSensorSpeed() {
@@ -237,7 +336,9 @@ export default {
   overflow-y: auto;
   max-height: 1000px;
 }
-
+#searchcard::-webkit-scrollbar{
+  width:0px;
+}
 .form-card form {
   display: flex;
   flex-direction: column;

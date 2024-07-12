@@ -1,28 +1,34 @@
 <template>
   <div style="width:1800px;height:1000px;">
     <div id="map_cc7d1b7fb1ad09e0732bbbd940dd9c71"></div>
-    <div id="timestamp_box" class="timestamp-box">
-      <p>Latest Timestamp: {{ predictLatestTimestamp }}</p>
+    <!-- 切换按钮 -->
+    <div id="toggle_mode" class="toggle-mode-box">
+      <button @click="toggleMode">{{ mode === 'speed' ? 'Switch to Flow' : 'Switch to Speed' }}</button>
     </div>
-    <div id="speed" class="timestamp-box"></div>
-    <div id="speed_rank" class="timestamp-box">
-      <p>Bottom 10 Average Speeds:</p>
-      <ul>
-        <li v-for="rank in predictTopSpeedRanks" :key="rank.sensor_id">{{ rank.sensor_id }}: {{ rank.speed.toFixed(2) }} km/h</li>
-      </ul>
+    <!-- 图标 -->
+    <div :class="['timestamp-box', modeClass]" id="speed"></div>
+    <div class="timestamp-box" id="LLM">
+
     </div>
-    <div id="chart" class="timestamp-box">
-      <canvas id="averageSpeedChart" width="750" height="280"></canvas>
-    </div>
-    <div id="street_speed_rank" class="timestamp-box">
-      <p>Street Average Speeds:</p>
-      <ul>
-        <li v-for="(avgSpeed, street) in predictStreetAverages" :key="street">{{ street }}: {{ avgSpeed !== null ? avgSpeed.toFixed(2) : 'No data' }} km/h</li>
-      </ul>
-    </div>
+    <!-- 搜索 -->
     <div id="search_bar" class="timestamp-box">
       <input type="text" v-model="searchQuery" placeholder="Enter Sensor ID or Street Name">
       <button @click="searchLocation">Search</button>
+    </div>
+    <!-- 时间和预测时长选择 -->
+    <div id="predict_time_box" class="timestamp-box">
+      <label for="selectedTime">Select Time:</label>
+      <input type="datetime-local" v-model="selectedTime">
+
+      <label for="forecastDuration">Forecast Duration:</label>
+      <select v-model="forecastDuration">
+        <option value="15min">15 minutes</option>
+        <option value="30min">30 minutes</option>
+        <option value="45min">45 minutes</option>
+        <option value="60min">60 minutes</option>
+      </select>
+      <button @click="predictTraffic">Predict</button>
+      <div id="result" style="margin-top: 10px;"></div>
     </div>
   </div>
 </template>
@@ -33,156 +39,194 @@ import L from 'leaflet';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import 'font-awesome/css/font-awesome.min.css';
-import Chart from 'chart.js';
-import {mapState, mapActions, mapGetters} from 'vuex';
+import { mapState, mapActions, mapGetters } from 'vuex';
 
 export default {
   name: 'LeafletMap',
   data() {
     return {
       map: null,
-      markers: [],
-      searchQuery: '',
+      markers: [], // 保存标记和位置
+      searchQuery: '', // 搜索查询
+      mode: 'speed', // 初始模式为速度
+      currentDateTime: '', // 当前时间
+      selectedTime: '', // 选择的时间
+      forecastDuration: '', // 预测时长
+      sensorData: [] // 存储从后端获取的传感器数据
     };
   },
   computed: {
-    ...mapState('predictMapData', [
-      'predictLatestTimestamp',
-      'predictSensorData',
-      'predictTopSpeedRanks',
-      'predictStreetAverages',
-      'predictOverallAverageSpeed',
-      'predictInitialMarkers',
-      'predictCurrentSpeeds'
-    ]),
-    ...mapState('predictWebSocket', [
-      'predictLatestTimestamp',
-      'predictSensorData',
-      'predictStreetAverages',
-      'predictOverallAverageSpeed',
-    ])
+    ...mapState('predictMapData', {
+      predictInitialMarkers: state => state.predictInitialMarkers
+    }),
+    modeClass() {
+      return this.mode === 'speed' ? 'speed-mode' : 'flow-mode';
+    }
   },
   mounted() {
     this.initMap();
-    this.initChart();
-    this.$store.dispatch('predictWebSocket/predictConnect');
-    this.$store.dispatch('predictMapData/predictInitCurrentSpeeds');
+    this.updateCurrentDateTime();
+    // setInterval(this.updateCurrentDateTime, 1000); // 每秒更新一次时间
   },
   methods: {
-    ...mapActions('predictMapData', [
-      'predictUpdateTopSpeedRanks',
-      'predictInitCurrentSpeeds'
-    ]),
-    initChart() {
-      const ctx = document.getElementById('averageSpeedChart').getContext('2d');
-      this.chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: [],
-          datasets: [
-            {
-              label: 'Average Speed',
-              data: [],
-              borderColor: 'rgba(75, 192, 192, 1)',
-              backgroundColor: 'rgba(75, 192, 192, 0.2)',
-              fill: true
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          scales: {
-            xAxes: [{
-              type: 'time',
-              time: {
-                unit: 'minute',
-                stepSize: 5, // 每5分钟一个时间间隔
-                tooltipFormat: 'YYYY-MM-DD HH:mm', // 显示格式
-                displayFormats: {
-                  minute: 'YYYY-MM-DD HH:mm'
-                }
-              },
-              scaleLabel: {
-                display: true,
-                labelString: 'Time'
-              }
-            }],
-            yAxes: [{
-              scaleLabel: {
-                display: true,
-                labelString: 'Average Speed (km/h)'
-              }
-            }]
-          }
-        }
-      });
-    },
-    updateMarkers() {
-      this.predictSensorData.forEach((point, i) => {
-        const sensor_id = point.sensor_id; // 直接使用传入的 sensor_id
-        if (!isNaN(point.speed)) { // 排除零值和非数字值，并确保位置有效
-          if (i < this.markers.length) {
-            const marker = this.markers[i];
-            marker.markerInstance
-              .setPopupContent(`${marker.content} <br> Speed: ${point.speed} <br> Timestamp: ${point.timestamp}`)
-              .setIcon(this.createCustomIcon(point.speed));
-            this.$store.commit('predictMapData/PREDICT_UPDATE_CURRENT_SPEED', {sensor_id, speed: point.speed});
-          } else {
-            const {sensor_id, position, content, speed} = point;
-            const popup = L.popup({maxWidth: '100%'}).setContent(`<div style="width: 100%; height: 100%;">${content}</div>`);
-            const markerInstance = L.marker(position, {icon: this.createCustomIcon(speed)}).addTo(this.map).bindPopup(popup);
-            this.markers.push({sensor_id, position, content, markerInstance, index: i});
-            this.$store.commit('predictMapData/PREDICT_UPDATE_CURRENT_SPEED', {sensor_id, speed});
-          }
-        }
-      });
-      this.predictUpdateTopSpeedRanks();
-      if (this.chart) this.updateChartData();
-    },
-    predictUpdateTopSpeedRanks() {
-      const topSpeedRanks = Object.entries(this.predictCurrentSpeeds)
-        .map(([sensor_id, speed]) => ({sensor_id, speed}))
-        .sort((a, b) => a.speed - b.speed)
-        .slice(0, 10);
-      this.$store.commit('predictMapData/PREDICT_SET_TOP_SPEED_RANKS', topSpeedRanks);
-    },
-    updateChartData() {
-      const timestamp = new Date().toISOString(); // 使用 ISO 格式的时间戳
-      if (this.predictOverallAverageSpeed === 0) return;
-      // 添加新数据点到图表
-      this.chart.data.labels.push(timestamp);
-      this.chart.data.datasets[0].data.push(this.predictOverallAverageSpeed);
-      // 保持数据点在一定数量之内
-      if (this.chart.data.labels.length > 100) {
-        this.chart.data.labels.shift();
-        this.chart.data.datasets[0].data.shift();
-      }
-      // 更新图表
-      this.chart.update();
+    ...mapActions('predictMapData', ['predictUpdateSensorData', 'predictInitCurrentSpeeds']),
 
+    toggleMode() {
+      this.mode = this.mode === 'speed' ? 'flow' : 'speed';
+      this.updateMarkers();
     },
-    createCustomIcon(speed) {
-      // 根据速度返回不同颜色的图标
-      let color = 'rgb(172,31,20)'; //深红
-      if (speed < 35) color = 'rgb(234,67,53)';
-      else if (speed < 45) color = 'rgb(250,122,19)';
-      else if (speed < 50) color = 'rgb(251,188,5)';
-      else if (speed < 55) color = 'rgb(84,201,57)';
-      else if (speed < 60) color = 'rgb(52,168,83)';
-      else if (speed < 70) color = 'rgb(36,108,55)';
-      else color = 'darkgreen';
+
+    async predictTraffic() {
+      console.log('Predict button clicked');
+      const time = this.selectedTime || this.currentDateTime;
+      const pretime = this.forecastDuration;
+      console.log(`Selected time: ${time}, Forecast duration: ${pretime}`);
+
+      // 格式化时间为 yyyy-mm-dd hh:mm:ss
+      const formattedTime = new Date(time).toISOString().slice(0, 19).replace('T', ' ');
+      console.log(`Formatted time: ${formattedTime}`);
+
+      try {
+        const response = await fetch(`http://127.0.0.1:5005/predict?hms=${formattedTime}&pretime=${pretime}`);
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error(`Error: ${errorData.error}`);
+          return;
+        }
+
+        const data = await response.json();
+        console.log('Successfully retrieved data:', data);
+
+        // 解析 JSON 字符串数组为对象数组
+        const parsedData = JSON.parse(data);
+        console.log('Parsed data:', parsedData);
+
+        this.updateMarkers(parsedData);
+      } catch (error) {
+        console.error("Error predicting traffic:", error);
+        document.getElementById("result").textContent = `Error: ${error.message}`;
+      }
+    },
+
+    updateSensorData(data) {
+      this.predictUpdateSensorData(data);
+    },
+
+    updateMarkers(data) {
+      console.log('Updating markers');
+      // 清除现有标记
+      this.markers.forEach(marker => {
+        this.map.removeLayer(marker.markerInstance);
+      });
+      this.markers = [];
+      //ok的
+      // console.log(1111);
+
+      console.log('Successfully data:', data);
+
+      if (!Array.isArray(data)) {
+        console.error('Expected data to be an array');
+        return;
+      }
+
+      // 根据数据更新标记
+      data.forEach(point => {
+        const { sensor_id, lat, lon, speed, flow} = point;
+        const value = this.mode === 'speed' ? speed : flow;
+        console.log(2222);
+        // 框内容
+        const popupContent = `
+          Sensor ID: ${sensor_id} <br>
+          ${this.mode === 'speed' ? 'Speed' : 'Flow'}: ${value}
+        `;
+
+        console.log(122121);
+        const marker = L.marker([lat, lon], {icon: this.createCustomIcon(value)})
+          .addTo(this.map)
+          .bindPopup(popupContent);
+
+        this.markers.push({ sensor_id, markerInstance: marker });
+      });
+      console.log('Markers updated');
+    },
+
+    createCustomIcon(value) {
+      let color = 'darkgreen'; // Default color
+      if (this.mode === 'speed') {
+        if (value < 35) color = 'rgb(234,67,53)';
+        else if (value < 45) color = 'rgb(250,122,19)';
+        else if (value < 50) color = 'rgb(251,188,5)';
+        else if (value < 55) color = 'rgb(84,201,57)';
+        else if (value < 60) color = 'rgb(52,168,83)';
+        else if (value < 65) color = 'rgb(52,168,83)';
+        else if (value < 70) color = 'rgb(36,108,55)';
+      } else {
+        if (value < 180) color = 'rgb(36,108,55)';
+        else if (value < 210) color = 'rgb(52,168,83)';
+        else if (value < 240) color = 'rgb(84,201,57)';
+        else if (value < 270) color = 'rgb(251,188,5)';
+        else if (value < 300) color = 'rgb(250,122,19)';
+        else if (value < 330) color = 'rgb(250,122,19)';
+        else color = 'rgb(234,67,53)';
+      }
+
       return L.divIcon({
         html: `<i class="fa fa-map-marker fa-2x" style="color:${color};"></i>`,
         iconSize: [20, 20],
         className: 'custom-div-icon'
       });
     },
+
+    updateCurrentDateTime() {
+      const now = new Date();
+      this.currentDateTime = now.toISOString().substring(0, 19).replace('T', ' '); // YYYY-MM-DD HH:MM:SS
+    },
+
+    searchLocation() {
+      const query = this.searchQuery.trim().toLowerCase();
+      if (!query) return;
+
+      // 根据传感器ID查找
+      let found = false;
+      for (let marker of this.markers) {
+        if (marker.sensor_id.toString() === query) {
+          this.map.setView(marker.markerInstance.getLatLng(), 15);
+          marker.markerInstance.openPopup();
+          found = true;
+          break;
+        }
+      }
+
+      if (found) return;
+
+      // 根据街道名查找
+      for (let street in this.streetAverages) {
+        if (street.toLowerCase().includes(query)) {
+          const streetMarkers = this.markers.filter(marker => this.getStreetNameForSensor(marker.sensor_id).toLowerCase().includes(query));
+          if (streetMarkers.length > 0) {
+            this.map.setView(streetMarkers[0].markerInstance.getLatLng(), 15);
+            streetMarkers.forEach(marker => marker.markerInstance.openPopup());
+            break;
+          }
+        }
+      }
+    },
+    getStreetNameForSensor(sensor_id) {
+      for (let street in this.streetAverages) {
+        if (this.streetAverages[street].includes(sensor_id)) {
+          return street;
+        }
+      }
+      return '';
+    },
+
     initMap() {
       this.map = L.map('map_cc7d1b7fb1ad09e0732bbbd940dd9c71', {
         center: [37.344741424615385, -121.94008344615385],
         zoom: 12,
         zoomControl: false,
       });
+
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         detectRetina: false,
         maxNativeZoom: 19,
@@ -194,55 +238,17 @@ export default {
         tms: false,
       }).addTo(this.map);
 
-      // 初始化标记数据
-      this.predictInitialMarkers.forEach((marker, index) => {
-        const { sensor_id, position, content, speed } = marker;
-        const popup = L.popup({ maxWidth: '100%' }).setContent(`<div style="width: 100%; height: 100%;">${content}</div>`);
-        const markerInstance = L.marker(position, { icon: this.createCustomIcon(speed) }).addTo(this.map).bindPopup(popup);
-        this.markers.push({ sensor_id, position, content, markerInstance, index });
-        // 初始化 currentSpeeds 中的传感器速度
-        this.$store.commit('predictMapData/PREDICT_UPDATE_CURRENT_SPEED', { sensor_id, speed: 0 });
+      // 初始化初始标记
+      this.predictInitialMarkers.forEach(marker => {
+        const {sensor_id, position, content, speed} = marker;
+        const popup = L.popup({maxWidth: '100%'}).setContent(`<div style="width: 100%; height: 100%;">${content}</div>`);
+        const markerInstance = L.marker(position, {icon: this.createCustomIcon(speed)}).addTo(this.map).bindPopup(popup);
+        this.markers.push({sensor_id: sensor_id, position, content, markerInstance});
       });
-      // 更新前十名
-      this.predictUpdateTopSpeedRanks();
     },
-    searchLocation() {
-      const query = this.searchQuery.trim().toLowerCase();
-      if (!query) return;
-      // 根据传感器ID查找
-      let found = false;
-      for (let marker of this.markers) {
-        if (marker.sensor_id.toString() === query) {
-          this.map.setView(marker.position, 15);
-          marker.markerInstance.openPopup();
-          found = true;
-          break;
-        }
-      }
-      if (found) return;
-      // 根据街道名查找
-      for (let street in this.predictStreetAverages) {
-        if (street.toLowerCase().includes(query)) {
-          const streetMarkers = this.markers.filter(marker => this.getStreetNameForSensor(marker.sensor_id).toLowerCase().includes(query));
-          if (streetMarkers.length > 0) {
-            this.map.setView(streetMarkers[0].position, 15);
-            streetMarkers.forEach(marker => marker.markerInstance.openPopup());
-            break;
-          }
-        }
-      }
-    },
-    getStreetNameForSensor(sensor_id) {
-      for (let street in this.predictStreetAverages) {
-        if (this.predictStreetAverages[street].includes(sensor_id)) {
-          return street;
-        }
-      }
-      return '';
-    }
   },
   watch: {
-    predictSensorData: 'updateMarkers'
+    sensorData: 'updateMarkers'
   }
 };
 </script>
@@ -256,7 +262,11 @@ export default {
   left: 0;
   top: 0;
 }
-
+#LLM{
+  width:310px;
+  height:800px;
+  transform:translate(1000px,0);
+}
 .timestamp-box {
   position: absolute;
   top: 10px;
@@ -274,10 +284,35 @@ export default {
   animation: pulse 2s infinite;
 }
 
-#speed_rank {
-  width: 310px;
-  height: 320px;
-  transform: translateY(80px);
+.speed-mode {
+  background-image: url('/speed.png');
+}
+
+.flow-mode {
+  background-image: url('/flow.png');
+}
+
+#toggle_mode {
+  position: absolute;
+  top: 20px;
+  left: 10px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 16px;
+  z-index: 1100; /* 确保切换按钮在最上层 */
+  text-align: center;
+}
+
+#toggle_mode button {
+  padding: 20px 100px;
+  background-color: rgba(0, 86, 179, 0.9);
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+#toggle_mode button:hover {
+  background-color: rgba(0, 86, 179, 0.9);
 }
 
 @keyframes pulse {
@@ -292,36 +327,25 @@ export default {
   }
 }
 
-.leaflet-container {
-  font-size: 1rem;
-}
-
 .custom-div-icon .custom-icon {
   text-shadow: 0 0 2px #000; /* 添加阴影效果 */
 }
 
-#chart {
-  width: 750px;
-  height: 280px;
-  transform: translate(0px, 410px);
-}
-
-#street_speed_rank {
-  width: 310px;
-  height: 320px;
-  transform: translate(1150px, 80px);
-}
-
 #search_bar {
-  width: 705px;
-  height: 280px;
-  transform: translate(755px, 410px);
+  width: 310px;
+  height: 200px; /* 增加高度以适应按钮 */
+  transform: translate(5px, 460px);
+  display: flex;
+  flex-direction: column; /* 将子元素按列排列 */
+  justify-content: center; /* 垂直居中 */
+  align-items: center; /* 水平居中 */
 }
 
 #search_bar input {
-  width: 500px;
+  width: 260px;
+  height: 60px;
   padding: 10px;
-  margin-bottom: 10px;
+  margin-bottom: 10px; /* 增加一些底部空间以便按钮与输入框分开 */
   border: none;
   border-radius: 5px;
   background-color: rgba(255, 255, 255, 0.1);
@@ -329,8 +353,8 @@ export default {
   font-size: 16px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
   transition: background-color 0.3s ease;
-  transform: translateY(100px);
 }
+
 
 #search_bar input::placeholder {
   color: rgba(255, 255, 255, 0.7);
@@ -345,7 +369,7 @@ export default {
   width: 310px;
   height: 70px;
   transform: translate(1150px, 0px);
-  background-image: url("/speed.png");
+
   background-size: cover;
   background-repeat: no-repeat;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
@@ -353,16 +377,80 @@ export default {
 }
 
 #search_bar button {
+  width: 260px; /* 与输入框宽度一致 */
   padding: 5px 10px;
-  background-color: #3b82f6;
+  background-color: rgba(0, 86, 179, 0.9);
   color: white;
   font-size: 16px;
   cursor: pointer;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
   border-radius: 5px;
-  transform: translateY(100px);
   border: none;
   height: 45px;
-  margin-left: 10px;
+}
+
+#predict_time_box {
+  position: absolute;
+  top: 110px;
+  left: 10px;
+  width: 310px;
+  height: 330px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 15px;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 16px;
+  z-index: 1100;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+#predict_time_box label {
+  display: block;
+  margin-bottom: 15px;
+}
+
+#predict_time_box input,
+#predict_time_box select {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 20px;
+  border: none;
+  border-radius: 5px;
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 16px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  transition: background-color 0.3s ease;
+}
+
+#predict_time_box select option {
+  background-color: #ffffff; /* 设置选项的背景颜色为浅灰色 */
+  color: black; /* 设置选项文字颜色为黑色 */
+}
+
+#predict_time_box input:focus,
+#predict_time_box select:focus {
+  background-color: rgba(255, 255, 255, 0.2);
+  outline: none;
+}
+
+#predict_time_box button {
+  width: 100%; /* 设置按钮宽度为100% */
+  padding: 10px;
+  background-color: rgba(0, 86, 179, 0.9);
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  border-radius: 5px;
+  border: none;
+  margin-top: 20px; /* 添加顶部间距 */
+}
+
+#predict_time_box button:hover {
+  background-color: rgba(0, 86, 179, 0.9);
 }
 </style>

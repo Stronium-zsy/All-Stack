@@ -11,7 +11,7 @@ import predictMapData from './modules/predictMapData'
 import predictWebSocket from './modules/predictWebSocket'
 import getters from './getters'
 import websocket from "./modules/websocket";
-import map from './modules/map';
+import route from './modules/route';
 Vue.use(Vuex)
 
 const store = new Vuex.Store({
@@ -26,7 +26,7 @@ const store = new Vuex.Store({
     websocket,
     predictMapData,
     predictWebSocket,
-    map
+    route
   },
   getters
 })

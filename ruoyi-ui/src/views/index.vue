@@ -21,11 +21,11 @@
       </ul>
     </div>
     <div id="search_bar" class="timestamp-box">
-      <input type="text" v-model="searchQuery" placeholder="输入传感器ID火车街道名称">
+      <input type="text" v-model="searchQuery" placeholder="输入传感器ID或街道名称">
       <button id="search_button" @click="searchLocation">搜索</button>
       <div id="search_teach">
-        <input type="text" v-model="startPoint" placeholder="输入出发位置所在传感器">
-        <input type="text" v-model="endPoint" placeholder="输入目的地所在传感器">
+        <input type="text" v-model="startPoint" placeholder="输入出发位置所在传感器" defaultValue="401440">
+        <input type="text" v-model="endPoint" placeholder="输入目的地所在传感器" defaultValue="401567">
         <button id="search_button" @click="searchRoute">搜索</button>
       </div>
     </div>
@@ -45,34 +45,29 @@ export default {
   name: 'LeafletMap',
   data() {
     return {
-      map: null,
       startPoint: '',
       endPoint: '',
-      markers: [], // 保存标记和位置
-      searchQuery: '', // 搜索查询
+      searchQuery: '',
       chart: null,
-      polyline: null,
-      movingMarker: null,
-      currentLatLngIndex: 0,
-      moveInterval: null,
-      refreshInterval: null
+      markers: [], // 将 markers 加入 data 中
     };
   },
   computed: {
-    ...mapState('map_data', ['latestTimestamp', 'sensorData', 'topSpeedRanks', 'streetAverages', 'overallAverageSpeed', 'initialMarkers', 'currentSpeeds']),
+    ...mapState('map_data', ['latestTimestamp', 'sensorData', 'topSpeedRanks', 'overallAverageSpeed', 'initialMarkers', 'currentSpeeds']),
+    ...mapState('route', ['routeCoordinates', 'setMap']),
     ...mapState('websocket', ['sensorData', 'streetAverages', 'overallAverageSpeed', 'latestTimestamp'])
   },
   mounted() {
     this.initMap();
     this.initChart();
+
     this.$store.dispatch('websocket/connect'); // 连接 WebSocket
-    this.initCurrentSpeeds(); // 初始化 currentSpeeds
+    this.$store.dispatch('map_data/initCurrentSpeeds'); // 初始化 currentSpeeds
+    this.$store.dispatch('map_data/updateTopSpeedRanks'); // 初始化 topSpeedRanks
   },
   methods: {
-    ...mapActions('map_data', [
-      'updateTopSpeedRanks',
-      'initCurrentSpeeds'
-    ]),
+    ...mapActions('map_data', ['initCurrentSpeeds', 'updateTopSpeedRanks']),
+    ...mapActions('route', ['searchRoute', 'setMap']),
     initChart() {
       const ctx = document.getElementById('averageSpeedChart').getContext('2d');
       this.chart = new Chart(ctx, {
@@ -101,8 +96,8 @@ export default {
               type: 'time',
               time: {
                 unit: 'minute',
-                stepSize: 5, // 每5分钟一个时间间隔
-                tooltipFormat: 'YYYY-MM-DD HH:mm', // 显示格式
+                stepSize: 5,
+                tooltipFormat: 'YYYY-MM-DD HH:mm',
                 displayFormats: {
                   minute: 'YYYY-MM-DD HH:mm'
                 }
@@ -126,58 +121,48 @@ export default {
       });
     },
     updateMarkers() {
-      // 根据数据更新标记
       this.sensorData.forEach((point, i) => {
-        const sensor_id = point.sensor_id; // 直接使用传入的 sensor_id
-        if (!isNaN(point.speed)) { // 排除零值和非数字值，并确保位置有效
+        const sensor_id = point.sensor_id;
+        if (!isNaN(point.speed)) {
           if (i < this.markers.length) {
             const marker = this.markers[i];
-            // 更新标记的颜色和popup内容
             marker.markerInstance
               .setPopupContent(`${marker.content} <br> Speed: ${point.speed} <br> Timestamp: ${point.timestamp}`)
               .setIcon(this.createCustomIcon(point.speed));
-            // 更新当前速度
             this.$store.commit('map_data/UPDATE_CURRENT_SPEED', { sensor_id, speed: point.speed });
           } else {
             const { sensor_id, position, content, speed } = point;
             const popup = L.popup({ maxWidth: '100%' }).setContent(`<div style="width: 100%; height: 100%;">${content}</div>`);
             const markerInstance = L.marker(position, { icon: this.createCustomIcon(speed) }).addTo(this.map).bindPopup(popup);
             this.markers.push({ sensor_id, position, content, markerInstance, index: i });
-            // 更新当前速度
             this.$store.commit('map_data/UPDATE_CURRENT_SPEED', { sensor_id, speed });
           }
         }
       });
-      // 更新前十名
       this.updateTopSpeedRanks();
-      // 更新图表数据
       if (this.chart) this.updateChartData();
     },
     updateTopSpeedRanks() {
       const topSpeedRanks = Object.entries(this.currentSpeeds)
         .map(([sensor_id, speed]) => ({ sensor_id, speed }))
-        .filter(({ speed }) => speed > 0)  // 过滤掉速度为零的数据
-        .sort((a, b) => a.speed - b.speed) // 按速度降序排序
-        .slice(0, 10);                     // 截取前10个数据
+        .filter(({ speed }) => speed > 0)
+        .sort((a, b) => a.speed - b.speed)
+        .slice(0, 10);
       this.$store.commit('map_data/SET_TOP_SPEED_RANKS', topSpeedRanks);
     },
     updateChartData() {
-      const timestamp = new Date().toISOString(); // 使用 ISO 格式的时间戳
+      const timestamp = new Date().toISOString();
       if (this.overallAverageSpeed === 0) return;
-      // 添加新数据点到图表
       this.chart.data.labels.push(timestamp);
       this.chart.data.datasets[0].data.push(this.overallAverageSpeed);
-      // 保持数据点在一定数量之内
       if (this.chart.data.labels.length > 100) {
         this.chart.data.labels.shift();
         this.chart.data.datasets[0].data.shift();
       }
-      // 更新图表
       this.chart.update();
     },
     createCustomIcon(speed) {
-      // 根据速度返回不同颜色的图标
-      let color = 'rgb(172,31,20)'; //深红
+      let color = 'rgb(172,31,20)';
       if (speed < 35) color = 'rgb(234,67,53)';
       else if (speed < 45) color = 'rgb(250,122,19)';
       else if (speed < 50) color = 'rgb(251,188,5)';
@@ -193,7 +178,7 @@ export default {
       });
     },
     initMap() {
-      this.map = L.map('map_cc7d1b7fb1ad09e0732bbbd940dd9c71', {
+      const map = L.map('map_cc7d1b7fb1ad09e0732bbbd940dd9c71', {
         center: [37.344741424615385, -121.94008344615385],
         zoom: 12,
         zoomControl: false,
@@ -207,24 +192,23 @@ export default {
         opacity: 1,
         subdomains: 'abc',
         tms: false,
-      }).addTo(this.map);
+      }).addTo(map);
 
-      // 初始化标记数据
+      this.$store.dispatch('route/setMap', map); // 设置地图实例
+
       this.initialMarkers.forEach((marker, index) => {
         const { sensor_id, position, content, speed } = marker;
         const popup = L.popup({ maxWidth: '100%' }).setContent(`<div style="width: 100%; height: 100%;">${content}</div>`);
-        const markerInstance = L.marker(position, { icon: this.createCustomIcon(speed) }).addTo(this.map).bindPopup(popup);
+        const markerInstance = L.marker(position, { icon: this.createCustomIcon(speed) }).addTo(map).bindPopup(popup);
         this.markers.push({ sensor_id, position, content, markerInstance, index });
-        // 初始化 currentSpeeds 中的传感器速度
         this.$store.commit('map_data/UPDATE_CURRENT_SPEED', { sensor_id, speed: 0 });
       });
-      // 更新前十名
+
       this.updateTopSpeedRanks();
     },
     searchLocation() {
       const query = this.searchQuery.trim().toLowerCase();
       if (!query) return;
-      // 根据传感器ID查找
       let found = false;
       for (let marker of this.markers) {
         if (marker.sensor_id.toString() === query) {
@@ -235,7 +219,6 @@ export default {
         }
       }
       if (found) return;
-      // 根据街道名查找
       for (let street in this.streetAverages) {
         if (street.toLowerCase().includes(query)) {
           const streetMarkers = this.markers.filter(marker => this.getStreetNameForSensor(marker.sensor_id).toLowerCase().includes(query));
@@ -255,7 +238,7 @@ export default {
       }
       return '';
     },
-    async searchRoute() {
+    searchRoute() {
       const startPoint = this.startPoint.trim();
       const endPoint = this.endPoint.trim();
 
@@ -264,103 +247,7 @@ export default {
         return;
       }
 
-      clearInterval(this.refreshInterval); // 停止之前的刷新间隔
-      clearInterval(this.moveInterval); // 停止之前的移动间隔
-
-      try {
-        const startCoordinates = this.getCoordinatesFromSensorId(startPoint);
-        const endCoordinates = this.getCoordinatesFromSensorId(endPoint);
-
-        const response = await fetch('http://localhost:4999/search_route', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ startPoint: startCoordinates, endPoint: endCoordinates })
-        });
-
-        const result = await response.json();
-
-        if (result.path) {
-          this.plotRoute(result.path);
-          this.startMovingMarker(result.path); // 开始移动圆圈
-          this.refreshInterval = setInterval(() => this.refreshRoute(), 1000); // 每2秒刷新路径
-        }
-      } catch (error) {
-        console.error('Error:', error);
-      }
-    },
-    async refreshRoute() {
-      const currentLatLng = this.movingMarker.getLatLng();
-      const currentPosition = [currentLatLng.lat, currentLatLng.lng];
-
-      try {
-        const response = await fetch('http://localhost:4999/search_route', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ startPoint: currentPosition, endPoint: this.getCoordinatesFromSensorId(this.endPoint) })
-        });
-
-        const result = await response.json();
-
-        if (result.path) {
-          this.plotRoute(result.path, false); // 不重置移动圆圈，保持其位置
-        }
-      } catch (error) {
-        console.error('Error:', error);
-      }
-    },
-    plotRoute(path, resetMarker = true) {
-      if (this.polyline) {
-        this.map.removeLayer(this.polyline);
-      }
-
-      const latlngs = path.map(coord => [coord[1], coord[0]]); // 翻转经纬度顺序以符合 Leaflet 的格式
-
-      this.polyline = L.polyline(latlngs, { color: 'blue' }).addTo(this.map);
-
-      if (resetMarker) {
-        if (this.movingMarker) {
-          this.map.removeLayer(this.movingMarker);
-        }
-        this.movingMarker = L.circleMarker(latlngs[0], {
-          radius: 8,
-          color: 'red'
-        }).addTo(this.map);
-        this.currentLatLngIndex = 0;
-      }
-
-      this.plotSpeedChart(latlngs);
-    },
-    startMovingMarker(path) {
-      this.moveInterval = setInterval(() => {
-        if (this.currentLatLngIndex < path.length - 1) {
-          this.currentLatLngIndex++;
-          const latlng = [path[this.currentLatLngIndex][1], path[this.currentLatLngIndex][0]];
-          this.movingMarker.setLatLng(latlng);
-        } else {
-          clearInterval(this.moveInterval);
-        }
-      }, 5000); // 每秒移动一次
-    },
-    plotSpeedChart(route) {
-      const speeds = route.map(sensor_id => {
-        const speedData = this.currentSpeeds[sensor_id];
-        return speedData ? speedData : 0;
-      });
-
-      const labels = route.map(sensor_id => sensor_id);
-
-      this.chart.data.labels = labels;
-      this.chart.data.datasets[0].data = speeds;
-
-      this.chart.update();
-    },
-    getCoordinatesFromSensorId(sensor_id) {
-      const marker = this.markers.find(marker => marker.sensor_id === sensor_id);
-      return marker ? marker.position : null;
+      this.$store.dispatch('route/searchRoute', { startPoint, endPoint });
     }
   },
   watch: {
@@ -419,7 +306,7 @@ export default {
   font-size: 1rem;
 }
 .custom-div-icon{
-  text-shadow: 0 0 2px #000; /* 添加阴影效果 */
+  text-shadow: 0 0 2px #000;
 }
 #chart {
   width: 750px;
@@ -448,6 +335,7 @@ export default {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
   transition: background-color 0.3s ease;
   transform: translateY(10px);
+  margin-left:10px;
 }
 #search_bar input::placeholder {
   color: rgba(255, 255, 255, 0.7);
@@ -480,13 +368,19 @@ export default {
   width:100px;
   margin-left: 10px;
 }
+
 #search_teach{
   width: 91%;
   height: 170px;
   border-radius:5px;
-  transform: translate(5%,10px);
+  transform: translate(6%,10px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
   background-color: rgba(255, 255, 255, 0.2);
+  display:flex;
+  flex-direction: column;
+}
+#search_teach button{
+  width:500px;
 }
 #des_sensor,#des_street{
   width:90%;

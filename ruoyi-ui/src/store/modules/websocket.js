@@ -40,6 +40,7 @@ const actions = {
       socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
         dispatch('handleMessage', data);
+        console.log('Received data from WebSocket server:', data);
       };
       socket.onclose = () => {
         commit('SET_CONNECTED', false);
